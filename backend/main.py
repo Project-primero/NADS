@@ -16,6 +16,7 @@ from backend.detection.inference import DetectionEngine
 from backend.detection.correlation import correlate
 from backend.alerts.alert_manager import AlertManager
 from backend.database.db import Database
+from backend.monitor.site_checker import SiteMonitor
 from backend.api import routes, websocket
 
 db = Database(settings.db_path)
@@ -48,6 +49,20 @@ sig = SignatureEngine(port_scan_ports=settings.port_scan_ports,
 ml = DetectionEngine(settings.anomaly_threshold, f"{settings.model_dir}/hybrid.pkl")
 alerts = AlertManager(save_fn=db.save_alert)
 
+
+def _push_monitor_alert(pushed: dict) -> None:
+    try:
+        loop = asyncio.get_event_loop()
+        loop.call_soon_threadsafe(
+            lambda p=pushed: asyncio.ensure_future(websocket.push_alert(p)))
+    except RuntimeError:
+        pass
+
+
+monitor = SiteMonitor(db, alerts, on_alert=_push_monitor_alert,
+                      allow_private=settings.allow_private_targets,
+                      timeout=settings.site_check_timeout)
+
 # analytics ring buffers (per-second)
 traffic_series: deque = deque(maxlen=120)   # [(ts, packets, pps)]
 attack_mix: Counter = Counter()
@@ -62,7 +77,8 @@ state = {"capture": capture, "flows": flows, "alerts": alerts, "db": db,
          "catalog": CATALOG, "traffic_series": traffic_series,
          "attack_mix": attack_mix, "proto_counts": proto_counts,
          "talker_bytes": talker_bytes, "talker_packets": talker_packets,
-         "recent_packets": recent_packets}
+         "recent_packets": recent_packets, "monitor": monitor,
+         "default_interval": settings.site_check_default_interval}
 routes.init(state)
 websocket.init(state)
 
@@ -81,6 +97,8 @@ def _on_packet(pkt: dict) -> None:
                                "packets": capture.stats["packets"]})
         _last_tick[0] = now
         _tick_pkts[0] = 0
+        # expire idle flows once per second so active_flows stays bounded
+        flows.expire()
 
     flow = flows.ingest(pkt)
     sig_alerts = sig.check_packet(pkt)
@@ -107,7 +125,13 @@ async def lifespan(app: FastAPI):
     capture.add_handler(_on_packet)
     capture.start()
     task = asyncio.ensure_future(websocket.broadcast_loop())
+    # seed default site on first boot
+    if settings.seed_site_url and not db.list_sites():
+        db.add_site("Primary site", settings.seed_site_url,
+                    settings.site_check_default_interval)
+    monitor.start()
     yield
+    await monitor.stop()
     capture.stop()
     task.cancel()
 

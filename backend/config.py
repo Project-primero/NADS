@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     anomaly_threshold: float = 0.7
     ws_broadcast_interval: float = 1.0
 
+    # Site monitor
+    site_check_default_interval: int = 60
+    site_check_timeout: float = 10.0
+    allow_private_targets: bool = False
+    seed_site_url: str = ""          # optional URL to auto-register on first boot
+
     # Signature thresholds (see docs/DETECTION_CATALOG.md)
     port_scan_ports: int = 15
     port_scan_window: int = 60

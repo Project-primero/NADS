@@ -8,6 +8,7 @@ numpy>=1.26
 pandas>=2.0
 scapy>=2.5
 websockets>=12.0
+httpx>=0.27
 pytest>=8.0
 # torch is optional (LSTM/Transformer need it):
 # torch>=2.2 --cpu

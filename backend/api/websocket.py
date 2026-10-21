@@ -14,6 +14,7 @@ def init(state: dict):
 
 def snapshot() -> dict:
     cap = _state["capture"]
+    mon = _state.get("monitor")
     return {"type": "stats",
             "packets": cap.stats["packets"],
             "pps": cap.current_pps(),
@@ -22,7 +23,8 @@ def snapshot() -> dict:
             "counts": _state["alerts"].counts,
             "attack_mix": dict(_state["attack_mix"]),
             "protocols": dict(_state["proto_counts"]),
-            "series": list(_state["traffic_series"])[-60:]}
+            "series": list(_state["traffic_series"])[-60:],
+            "sites": mon.snapshot() if mon else []}
 
 
 async def broadcast_loop():
