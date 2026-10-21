@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Alert, SeriesPoint } from '../types';
+import type { Alert, SeriesPoint, Site } from '../types';
 
 interface Snapshot {
   packets: number; pps: number; active_flows: number;
   alerts: Alert[]; counts: Record<string, number>;
   attack_mix: Record<string, number>; protocols: Record<string, number>;
-  series: SeriesPoint[];
+  series: SeriesPoint[]; sites: Site[];
 }
 
 export function useWebSocket(url: string) {
@@ -15,6 +15,7 @@ export function useWebSocket(url: string) {
   const [attackMix, setAttackMix] = useState<Record<string, number>>({});
   const [protocols, setProtocols] = useState<Record<string, number>>({});
   const [series, setSeries] = useState<SeriesPoint[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
@@ -27,7 +28,7 @@ export function useWebSocket(url: string) {
       sock.onopen = () => { setConnected(true); attempt = 0; };
       sock.onclose = () => {
         setConnected(false);
-        if (!closed) {  // exponential backoff reconnect
+        if (!closed) {
           attempt += 1;
           timer = setTimeout(connect, Math.min(1000 * 2 ** attempt, 15000));
         }
@@ -43,6 +44,7 @@ export function useWebSocket(url: string) {
           setAttackMix(s.attack_mix ?? {});
           setProtocols(s.protocols ?? {});
           setSeries(s.series ?? []);
+          setSites(s.sites ?? []);
         } else if (m.type === 'alert') {
           setAlerts((a) => [m as Alert, ...a].slice(0, 100));
         }
@@ -54,7 +56,7 @@ export function useWebSocket(url: string) {
     return () => { closed = true; clearTimeout(timer); clearInterval(ping); sock?.close(); };
   }, [url]);
 
-  return { stats, alerts, counts, attackMix, protocols, series, connected };
+  return { stats, alerts, counts, attackMix, protocols, series, sites, connected };
 }
 
 export function useTopTalkers() {
@@ -71,3 +73,31 @@ export function useTopTalkers() {
   }, []);
   return talkers;
 }
+
+export function useSiteTrend(siteId: number | null) {
+  const [trend, setTrend] = useState<import('../types').TrendPoint[]>([]);
+  useEffect(() => {
+    if (!siteId) {
+      setTrend([]);
+      return;
+    }
+    let cancelled = false;
+    const fetchTrend = async () => {
+      try {
+        const r = await fetch(`/api/sites/${siteId}/trend?limit=48`);
+        if (r.ok) {
+          const j = await r.json();
+          if (!cancelled) setTrend(j.trend ?? []);
+        }
+      } catch { /* ignore */ }
+    };
+    fetchTrend();
+    const interval = setInterval(fetchTrend, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [siteId]);
+  return trend;
+}
+

@@ -8,13 +8,13 @@ export const CATEGORIES = [
 export type Category = (typeof CATEGORIES)[number];
 
 export const CATEGORY_COLOR: Record<Category, string> = {
-  Recon: '#38bdf8',
-  DoS: '#ef4444',
-  Auth: '#f97316',
-  'DNS & Exfil': '#a78bfa',
-  'Lateral & C2': '#f43f5e',
-  Web: '#eab308',
-  ML: '#22c55e',
+  Recon: 'var(--blue)',
+  DoS: 'var(--crit)',
+  Auth: 'var(--high)',
+  'DNS & Exfil': 'var(--violet)',
+  'Lateral & C2': 'var(--accent)',
+  Web: 'var(--med)',
+  ML: 'var(--low)',
 };
 
 const MAP: Record<string, Category> = {
