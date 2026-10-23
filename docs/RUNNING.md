@@ -1,51 +1,112 @@
-# Running with `make` — target-by-target guide
+# Running Network Anomaly Detection — Make Target Reference & Operational Guide
 
-> Companion: [DEPLOYMENT](DEPLOYMENT.md) (environments) · [TESTING](TESTING.md) ·
-> [CONFIGURATION](CONFIGURATION.md) (`NAD_*` vars). Run `make help` anytime.
+This document describes all operational commands and targets available in the Network Anomaly Detection (NAD) platform.
 
-## First run (fresh machine, in order)
+---
+
+## 1. Quick Initial Launch (Fresh Machine)
 
 ```bash
-make setup          # 1. venv at /tmp/nadvenv + pip install + npm install
-make train          # 2. builds models/hybrid.pkl (synthetic data)
-make run &          # 3. backend → http://127.0.0.1:8000/docs
-make run-frontend   # 4. dashboard → http://localhost:5173
-make test           # 5. confirm 7/7 green
+# 1. Create Python environment and install frontend/backend dependencies
+make setup
+
+# 2. Train baseline detection model (saved to models/hybrid.pkl)
+make train
+
+# 3. Start backend API server & detection engine (starts on port 8000)
+make run &
+
+# 4. Start React SOC Dashboard (starts on port 5174)
+make run-frontend
+
+# 5. Run test suite to verify system integrity
+make test
 ```
 
-## Every target
+Access points:
+- **SOC Web Dashboard**: `http://localhost:5174`
+- **Swagger Interactive API**: `http://127.0.0.1:8000/docs`
+- **API Health Endpoint**: `http://127.0.0.1:8000/api/health`
 
-| Target | What it runs | When to use it |
+---
+
+## 2. Make Target Directory
+
+| Target | Command Executed | Purpose & Usage |
 |---|---|---|
-| `make help` | lists targets | anytime you forget |
-| `make setup` | `python3 -m venv` + `pip install -r requirements.txt` + `npm install` | once per machine (re-run after pulling new deps) |
-| `make train` | `train_model.py --model hybrid` → `models/hybrid.pkl` | after cloning; after editing features/model code |
-| `make run` | uvicorn backend on `127.0.0.1:8000` | normal backend start (simulate mode) |
-| `make run-frontend` | `npm run dev` in `frontend/` | dashboard dev server |
-| `make test` | `pytest tests/ -v` (needs backend on :8000) | after any backend change |
-| `make smoke` | curl check of all 6 API endpoints | fastest "is it alive?" probe |
-| `make live IFACE=eth0` | backend with real NIC capture (**needs sudo**, your network only) | production/lab sniffing |
-| `make docker-up` / `make docker-down` | full stack via compose | containerized run |
-| `make clean` | removes `dist`, `node_modules`, caches | disk cleanup / fresh frontend install |
+| `make help` | Lists Makefile commands | Quick command reference. |
+| `make setup` | `python3 -m venv` + `pip install` + `npm install` | First-time installation and dependency updates. |
+| `make train` | `train_model.py --model hybrid` | Trains IsolationForest and statistical anomaly detectors. |
+| `make run` | Starts uvicorn backend on port `8000` | Standard backend launch. Supports `MODE=`, `IFACE=`, `FILE=`. |
+| `make run-frontend` | `npm run dev` in `frontend/` | Starts Vite React frontend on port `5174`. |
+| `make live` | `sudo uvicorn ... AEGIS_MODE=live` | Live packet sniffing on physical NIC (e.g. `IFACE=eth0`). |
+| `make agent` | `python3 scripts/aegis-agent.py` | Runs remote telemetry client for remote PCs. |
+| `make test` | `pytest tests/ -v` | Runs unit, smoke, and connect integration tests. |
+| `make smoke` | `bash scripts/smoke.sh` | One-shot REST API sanity check. |
+| `make docker-up` | `docker-compose up -d` | Containerized launch with host networking and `NET_RAW`. |
+| `make docker-down` | `docker-compose down` | Stops Docker containers. |
+| `make clean` | Cleans dist, caches, and temp files | Resets environment artifacts. |
 
-## Overriding defaults
+---
 
+## 3. Ingestion Modes & Command Overrides
+
+You can switch the ingestion engine directly at startup using environment overrides:
+
+### A. Synthetic Simulator (Demo Mode)
 ```bash
-make run HOST=0.0.0.0 PORT=9000        # expose backend on LAN, port 9000
-make train DATASET=data/nad_dataset.csv   # train on a real CSV
-make live IFACE=wlan0 PORT=8000           # sniff Wi-Fi instead of eth0
-make test PY=/usr/bin/python3             # use a different interpreter
+# Standard simulation
+make run MODE=demo
+
+# Or high-intensity flood stress testing
+AEGIS_MODE=simulate make run
 ```
 
-Variables: `PY` (default `/tmp/nadvenv/bin/python`), `HOST`, `PORT`, `DATASET`, `IFACE`.
+### B. Live Hardware Capture (Host NIC)
+```bash
+# Sniff wireless interface
+make live IFACE=wlan0
 
-## Troubleshooting
+# Sniff ethernet interface on port 8000
+make live IFACE=eth0 PORT=8000
+```
 
-| Symptom | Fix |
-|---|---|
-| `PY: No such file` / venv errors | run `make setup` first |
-| `Address already in use :8000` | `fuser -k 8000/tcp`, or `make run PORT=8001` |
-| `make test` fails on `/api/*` | backend must be running (`make run &`), then retry |
-| `make live` asks for password | expected — live capture needs root (`sudo`) |
-| dashboard shows CONNECTING… | backend down or wrong WS port — check `make smoke` |
-| `npm` errors in `run-frontend` | `cd frontend && npm install`, then retry |
+### C. Offline PCAP File Replay
+```bash
+# Replay captured network trace
+make run MODE=pcap FILE=data/sample_attacks.pcap
+```
+
+### D. Run Distributed Remote Agent
+```bash
+# Run agent locally or on remote computer
+make agent HOST=10.175.10.216 PORT=8000 TOKEN=agt_xxxxxxxx SITE="Computer Lab"
+```
+
+---
+
+## 4. Parameter Customization
+
+| Variable | Default | Example Usage |
+|---|---|---|
+| `HOST` | `127.0.0.1` | `make run HOST=0.0.0.0` (bind to all LAN addresses) |
+| `PORT` | `8000` | `make run PORT=8080` |
+| `MODE` | `simulate` | `make run MODE=live` or `make run MODE=pcap` |
+| `IFACE` | `lo` | `make live IFACE=enp3s0` |
+| `FILE` | `""` | `make run MODE=pcap FILE=/tmp/dump.pcap` |
+| `TOKEN` | `""` | `make agent TOKEN=agt_abc123` |
+| `SITE` | `Default Site` | `make agent SITE="Science Lab"` |
+| `PY` | `/tmp/nadvenv/bin/python` | `make run PY=python3` |
+
+---
+
+## 5. Troubleshooting & FAQ
+
+| Problem | Root Cause | Solution |
+|---|---|---|
+| **Port 8000 or 5174 in use** | An existing process is bound to the port. | `fuser -k 8000/tcp` or check running containers with `docker ps`. |
+| **Agent 401 Unauthorized** | Token is incorrect, expired, or deleted. | Generate a fresh token via **Connected Computers** tab or `POST /api/agents/tokens`. |
+| **Permission Denied on Capture** | Sniffing raw NICs requires root or capabilities. | Use `sudo make live IFACE=eth0` or assign capabilities: `sudo setcap cap_net_raw,cap_net_admin=eip $(which python3)`. |
+| **Frontend shows DISCONNECTED** | Backend API is stopped or port is blocked. | Verify backend with `curl http://127.0.0.1:8000/api/health`. Ensure firewall allows port 8000. |
+| **PCAP Upload Error 413** | File exceeds reverse proxy payload limits. | Increase `client_max_body_size 100M;` in Nginx configuration. |
+| **Tests Fail with Connection Refused** | Backend is not running for integration tests. | Run `make run &` before executing `make test`. |

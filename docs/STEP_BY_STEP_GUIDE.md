@@ -1,6 +1,6 @@
-# 📘 Aegis — Full Step-by-Step Documentation & Operations Manual
+# 📘 Network Anomaly Detection (NAD) — Full Step-by-Step Documentation & Operations Manual
 
-Welcome to the comprehensive, step-by-step technical and operational manual for **Aegis**. Aegis is a dual-engine cybersecurity platform combining a real-time **Security Operations Center (SOC) Network Anomaly Detection (NAD)** system with a **Web Application Security & Continuous Uptime Monitoring Platform (WebSec)**.
+Welcome to the comprehensive, step-by-step technical and operational manual for **Network Anomaly Detection (NAD)**. The system is a dual-engine cybersecurity platform combining a real-time **Security Operations Center (SOC) Network Anomaly Detection** system with a **Web Application Security & Continuous Uptime Monitoring Platform (WebSec)**.
 
 ---
 
@@ -13,7 +13,7 @@ Welcome to the comprehensive, step-by-step technical and operational manual for 
 5. [Step 3: Configuration & Environment Variables](#5-step-3-configuration--environment-variables)
 6. [Step 4: Launching the Backend Service](#6-step-4-launching-the-backend-service)
 7. [Step 5: Launching the Frontend SOC Dashboard](#7-step-5-launching-the-frontend-soc-dashboard)
-8. [Step 6: Operating the Aegis NAD SOC Console](#8-step-6-operating-the-aegis-nad-soc-console)
+8. [Step 6: Operating the NAD SOC Console](#8-step-6-operating-the-nad-soc-console)
 9. [Step 7: Operating the WebSec Vulnerability & Uptime Platform](#9-step-7-operating-the-websec-vulnerability--uptime-platform)
 10. [Step 8: Step-by-Step Attack Simulation & Detection Testing](#10-step-8-step-by-step-attack-simulation--detection-testing)
 11. [Step 9: Complete REST API & WebSocket Specification](#11-step-9-complete-rest-api--websocket-specification)
@@ -25,7 +25,7 @@ Welcome to the comprehensive, step-by-step technical and operational manual for 
 
 ## 1. System Overview & Architecture
 
-Aegis functions using a mental model of **Eyes**, **Brain**, and **Voice**:
+The system functions using a mental model of **Eyes**, **Brain**, and **Voice**:
 
 ```
  ┌────────────────────────────────────────────────────────────────────────┐
@@ -72,7 +72,7 @@ Aegis functions using a mental model of **Eyes**, **Brain**, and **Voice**:
 ```
 
 ### Dual-Platform Capabilities
-- **Platform 1: Aegis NAD (Network Anomaly Detection)**
+- **Platform 1: Network Anomaly Detection (NAD)**
   - Real-time packet parsing across L2–L7 (Ethernet, ARP, IPv4, TCP, UDP, ICMP, DNS, HTTP).
   - 41 statistical & behavioral flow features (packet lengths, inter-arrival times, flag ratios, entropy, login attempt tracking).
   - 30 signature rules mapped to MITRE ATT&CK techniques with remediation guidance.
@@ -147,7 +147,7 @@ If you prefer setting up the components manually without Makefile:
 
 ## 4. Step 2: Machine Learning Model Training
 
-The Aegis ML engine uses an **Isolation Forest** paired with a **StandardScaler** to model normal network flow behavior. Before starting the backend, you need a trained model pickle at `models/hybrid.pkl`.
+The ML engine uses an **Isolation Forest** paired with a **StandardScaler** to model normal network flow behavior. Before starting the backend, you need a trained model pickle at `models/hybrid.pkl`.
 
 ### Option A: Fast Train on Built-in Synthetic Data (Recommended for first run)
 Run:
@@ -184,7 +184,7 @@ The trainer automatically handles column matching against the 41-feature schema 
 
 ## 5. Step 3: Configuration & Environment Variables
 
-Aegis uses Pydantic Settings with the `NAD_` prefix. You can configure it via environment variables or a `.env` file in the project root.
+The system uses Pydantic Settings with the `NAD_` prefix. You can configure it via environment variables or a `.env` file in the project root.
 
 ### Copy the example configuration:
 ```bash
@@ -269,7 +269,7 @@ Check the top navigation bar:
 
 ---
 
-## 8. Step 6: Operating the Aegis NAD SOC Console
+## 8. Step 6: Operating the NAD SOC Console
 
 The SOC Console interface is organized into 4 primary views:
 
@@ -303,13 +303,13 @@ The SOC Console interface is organized into 4 primary views:
 
 ## 9. Step 7: Operating the WebSec Vulnerability & Uptime Platform
 
-Aegis includes a dedicated Website Security & Uptime Platform. Switch to it by clicking **"SWITCH PLATFORM → Web Security"** in the sidebar.
+The system includes a dedicated Website Security & Uptime Platform. Switch to it by clicking **"SWITCH PLATFORM → Web Security"** in the sidebar.
 
 ### Step 7.1: Registering a Target Website
 1. Click the **"+ Add Site"** button in the WebSec view.
 2. Enter the target URL (e.g., `https://example.com`) and a friendly name.
 3. Set the monitoring interval (default: 60 seconds).
-4. Click **"Save & Run First Audit"**. Aegis immediately probes the target.
+4. Click **"Save & Run First Audit"**. The scanner immediately probes the target.
 
 ### Step 7.2: Running an Instant Ad-hoc Scan
 To scan a target on-demand without registering it for periodic monitoring:
@@ -415,7 +415,7 @@ Trigger web attack detectors using `curl` against your local target or REPL:
 - **SSRF**: Send `http://169.254.169.254/latest/meta-data/`
 
 ### Level 5: Live Network Lab Attack (Kali Linux against isolated VM)
-In an isolated lab environment where Aegis is capturing live packets (`make live IFACE=eth0`):
+In an isolated lab environment where the backend is capturing live packets (`make live IFACE=eth0`):
 1. **SYN Flood Attack**:
    ```bash
    sudo hping3 -S --flood -p 80 <target-ip>
@@ -433,7 +433,7 @@ In an isolated lab environment where Aegis is capturing live packets (`make live
    ```bash
    hydra -l root -P passwords.txt ssh://<target-ip>
    ```
-Observe each attack lighting up in the Aegis SOC dashboard within 1 second.
+Observe each attack lighting up in the SOC dashboard within 1 second.
 
 ---
 
@@ -477,7 +477,7 @@ Observe each attack lighting up in the Aegis SOC dashboard within 1 second.
 
 ## 12. Step 10: Docker & Containerized Deployment
 
-Aegis includes a complete multi-container setup via `docker-compose.yml`.
+The platform includes a complete multi-container setup via `docker-compose.yml`.
 
 ### Step 10.1: Build and Launch Containers
 ```bash
@@ -502,7 +502,7 @@ docker-compose down
 
 ## 13. Step 11: Production Deployment & Live Packet Capture
 
-When deploying Aegis to monitor live physical or virtual network interfaces:
+When deploying the system to monitor live physical or virtual network interfaces:
 
 ### Step 11.1: Live Capture Command
 Live capture requires root privileges because Scapy opens raw sockets in promiscuous mode:
@@ -515,10 +515,10 @@ make live IFACE=eth0 PORT=8000
 ```
 
 ### Step 11.2: Running as a Linux Systemd Service
-Create `/etc/systemd/system/aegis-nad.service`:
+Create `/etc/systemd/system/nad.service`:
 ```ini
 [Unit]
-Description=Aegis Network Anomaly Detection Service
+Description=Network Anomaly Detection Service
 After=network.target
 
 [Service]
@@ -539,13 +539,13 @@ WantedBy=multi-user.target
 Enable and start the service:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable aegis-nad
-sudo systemctl start aegis-nad
-sudo systemctl status aegis-nad
+sudo systemctl enable nad
+sudo systemctl start nad
+sudo systemctl status nad
 ```
 
 ### Step 11.3: Production Nginx Reverse Proxy with WebSocket Support
-When placing Aegis behind Nginx with SSL termination:
+When placing the service behind Nginx with SSL termination:
 ```nginx
 server {
     listen 80;
@@ -595,6 +595,93 @@ server {
   sudo ip link set eth0 promisc on
   ```
 - **Encrypted Traffic Note**: Deep payload inspection operates on unencrypted traffic (HTTP, DNS, ARP). For TLS-encrypted traffic, detection relies on statistical flow dynamics (packet frequencies, burst sizes, inter-arrival time distributions, TCP window anomalies) handled by the ML Anomaly Engine.
+
+---
+
+## 13. Step 11: Operating the Universal Connect System & Multi-Computer Telemetry
+
+The platform includes an enterprise **Connect** subsystem supporting **5 input modes**, allowing organizations, university campuses, and lab networks to capture and inspect real computers and network equipment through the unified detection engine.
+
+### Mode 1: Simulator (Demos & Training)
+Run 14 realistic cyber attack classes with configurable intensity:
+```bash
+# Start backend in simulator mode with custom intensity
+make run MODE=demo
+# Or via environment:
+AEGIS_MODE=simulate AEGIS_INTENSITY=high make run
+```
+In the UI, click **Connect & Ingest** to toggle intensity (*Low, Medium, High, Stress*) and selectively enable/disable specific attack classes.
+
+### Mode 2: This Computer (Local NIC Sniffing)
+Capture live traffic directly from physical, Wi-Fi, or loopback network cards:
+```bash
+make live IFACE=eth0
+# Or using CAP_NET_RAW capability without full root:
+sudo setcap cap_net_raw,cap_net_admin=eip $(which python3)
+make run MODE=live IFACE=eth0
+```
+- Open the **Connect & Ingest** tab in the SOC console.
+- Select your interface from the dropdown (shows IP, MAC, carrier status, and packets seen).
+- Optionally specify a BPF filter (e.g. `tcp and not port 22 and not port 8000`).
+- Click **Start Live Capture**.
+
+### Mode 3: Upload PCAP Replay
+Replay historical Wireshark captures (`.pcap` / `.pcapng` up to 100MB) through all 30 detectors and ML:
+```bash
+make run MODE=pcap FILE=data/sample.pcap
+```
+Or drag-and-drop the PCAP file in the **Upload PCAP File** card in the dashboard. Select playback speed (*Instant*, *Realtime*, *5x*, *10x*) and monitor progress in real-time.
+
+### Mode 4: Switch Mirror Port / Network TAP
+Mirror traffic from enterprise switches directly into the monitoring listening interface:
+
+#### Cisco Catalyst / Nexus SPAN Configuration:
+```cisco
+configure terminal
+monitor session 1 source interface GigabitEthernet 0/1 - 24 both
+monitor session 1 destination interface GigabitEthernet 0/48
+end
+```
+
+#### MikroTik RouterOS Port Mirror:
+```routeros
+/interface ethernet switch
+set mirror-source=ether1 mirror-target=ether5
+```
+
+#### Ubiquiti UniFi / EdgeSwitch:
+```bash
+configure
+set interfaces ethernet eth0 mirror eth1
+commit
+```
+
+#### Linux Bridge / Open vSwitch (`tc mirror`):
+```bash
+sudo ip link set dev eth1 promisc on
+sudo tc qdisc add dev eth0 ingress
+sudo tc filter add dev eth0 parent ffff: matchall action mirred egress mirror dev eth1
+```
+
+#### 10-Second Link Verification:
+In the UI under **Mirror Port / Switch SPAN**, click **10s Link Test**. The system will sniff packets for 10 seconds and report whether packets are actively arriving or provide an exact troubleshooting fix.
+
+### Mode 5: Remote Multi-Computer Agents (Universities & Organizations)
+Deploy lightweight agents to external computers, university lab machines, and branch servers:
+
+```bash
+# 1. Generate an endpoint token in UI or via API:
+curl -X POST http://127.0.0.1:8000/api/agents/tokens \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Lab-PC-01", "site": "Computer Science Lab 3"}'
+
+# 2. One-line terminal install on any target computer:
+curl -sSL http://<SERVER_IP>:8000/api/agents/install.sh | bash -s -- <TOKEN> "Computer Science Lab 3" "Lab-PC-01"
+
+# 3. Or manually with the agent script:
+python3 scripts/aegis-agent.py --server http://<SERVER_IP>:8000 --token <TOKEN> --site "Lab 3"
+```
+The agent captures local network flow metadata (without sensitive internal payload contents), encrypts telemetry, and streams it to the central SOC console. All connected computers appear live under the **Connected Computers** tab!
 
 ---
 
