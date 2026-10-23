@@ -118,8 +118,8 @@ export function WebSecPlatform({
             <Icon name="globe" size={22} />
           </span>
           <span className="brand-name">
-            Aegis WebSec
-            <small>Vulnerability Assessment Platform</small>
+            WebSec
+            <small>Website Security & Vulnerability Platform</small>
           </span>
         </div>
 

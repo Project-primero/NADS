@@ -546,12 +546,12 @@ export function WebSecReportsPage({
         {/* Sign-off & Audit Disclaimer */}
         <div className="formal-footer">
           <div className="formal-disclaimer">
-            <b>Assessment Notice:</b> This report is generated dynamically by the Aegis WebSec Autonomous Security Scanner.
+            <b>Assessment Notice:</b> This report is generated dynamically by the WebSec Autonomous Security Scanner.
             Findings reflect the state of the target at the time of inspection. Continuous automated auditing is recommended
             to detect regressions.
           </div>
           <div className="formal-signoff">
-            <span>Verified by: Aegis Security Posture Engine v2.4</span>
+            <span>Verified by: WebSec Security Posture Engine v2.4</span>
             <span>Document Checksum: {reportId}-SHA256-VALID</span>
           </div>
         </div>

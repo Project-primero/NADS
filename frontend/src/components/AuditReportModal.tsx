@@ -608,7 +608,7 @@ export function AuditReportModal({
                     </div>
                     <div className="info-row">
                       <span className="info-lbl">Scan Engine</span>
-                      <span className="info-val">Aegis Dynamic Vulnerability Probe</span>
+                      <span className="info-val">Dynamic Vulnerability Probe</span>
                     </div>
                   </div>
                 </div>

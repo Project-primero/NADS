@@ -14,6 +14,9 @@ import { AddSiteModal } from './AddSiteModal';
 import { DashboardWebSecWidget } from './DashboardWebSecWidget';
 import { AuditReportModal } from './AuditReportModal';
 import { WebSecPlatform } from './websec/WebSecPlatform';
+import { ConnectPage } from './connect/ConnectPage';
+import { AgentsPage } from './connect/AgentsPage';
+import { AssetsAllowlistPage } from './connect/AssetsAllowlistPage';
 import { initTheme, type Theme } from '../lib/themes';
 import type { Site } from '../types';
 
@@ -27,6 +30,9 @@ const DETECTOR_GROUPS = [
 const TABS = [
   { id: 'Overview', label: 'Overview', icon: 'dashboard' },
   { id: 'Alerts', label: 'Alerts', icon: 'alert' },
+  { id: 'Connect', label: 'Connect & Ingest', icon: 'radio' },
+  { id: 'Agents', label: 'Connected Computers', icon: 'desktop' },
+  { id: 'Assets', label: 'Assets & Allowlist', icon: 'link' },
   { id: 'Network', label: 'Network', icon: 'network' },
   { id: 'Threat Intel', label: 'Threat Intel', icon: 'brain' },
 ] as const;
@@ -48,7 +54,7 @@ function Kpi({ label, value, sub, accent, icon }: {
 
 export function Dashboard() {
   const [platform, setPlatform] = useState<'nad' | 'websec'>(() => {
-    const saved = localStorage.getItem('aegis_platform');
+    const saved = localStorage.getItem('nad_platform') || localStorage.getItem('aegis_platform');
     return saved === 'websec' ? 'websec' : 'nad';
   });
   const [tab, setTab] = useState<string>('Overview');
@@ -57,7 +63,11 @@ export function Dashboard() {
   const [auditSite, setAuditSite] = useState<Site | null>(null);
 
   const wsUrl = `ws://${window.location.hostname}:8000/ws`;
-  const { stats, alerts, counts, attackMix, protocols, series, sites, connected } = useWebSocket(wsUrl);
+  const {
+    stats, alerts, counts, attackMix, protocols, series, sites,
+    connectStatus, learningMode, onlineAgents, connected
+  } = useWebSocket(wsUrl);
+
   const crit = (counts.CRITICAL ?? 0) + (counts.HIGH ?? 0);
   const totalAlerts = alerts.length;
 
@@ -79,7 +89,7 @@ export function Dashboard() {
         onThemeChange={(newTheme) => setTheme(newTheme)}
         onSwitchPlatform={(p) => {
           setPlatform(p);
-          localStorage.setItem('aegis_platform', p);
+          localStorage.setItem('nad_platform', p);
         }}
       />
     );
@@ -90,7 +100,7 @@ export function Dashboard() {
       <aside className="sidebar">
         <div className="brand">
           <span className="logo"><Icon name="shield" size={22} /></span>
-          <span className="brand-name">Aegis NAD<small>SOC Console</small></span>
+          <span className="brand-name">Network Anomaly Detection<small>SOC Console</small></span>
         </div>
 
         {/* Platform Switcher to WebSec */}
@@ -100,7 +110,7 @@ export function Dashboard() {
             className="platform-switch-btn websec-target"
             onClick={() => {
               setPlatform('websec');
-              localStorage.setItem('aegis_platform', 'websec');
+              localStorage.setItem('nad_platform', 'websec');
             }}
             title="Switch to Website Security Monitoring & Vulnerability Assessment Platform"
           >
@@ -142,11 +152,51 @@ export function Dashboard() {
             </div>
           </div>
           <div className="topbar-right" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Active Ingestion Source Indicator */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: 'var(--card-bg, #161b22)',
+              padding: '6px 12px',
+              borderRadius: 6,
+              border: '1px solid var(--border, #30363d)',
+              fontSize: 12
+            }}>
+              <span style={{
+                width: 8, height: 8, borderRadius: '50%',
+                backgroundColor: connectStatus?.running ? '#3fb950' : '#da3633'
+              }} />
+              <span style={{ color: 'var(--muted)' }}>Mode:</span>
+              <span style={{ fontWeight: 600, color: 'var(--blue)' }}>
+                {connectStatus?.source_info || 'Simulator'}
+              </span>
+              <button
+                onClick={() => setTab('Connect')}
+                className="btn"
+                style={{ padding: '2px 8px', fontSize: 11, border: '1px solid var(--border)' }}
+              >
+                Change
+              </button>
+            </div>
+
+            {learningMode && (
+              <span style={{
+                background: 'rgba(210,153,34,0.15)',
+                border: '1px solid #d29922',
+                color: '#e3b341',
+                padding: '4px 10px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 600
+              }}>
+                LEARNING BASELINE
+              </span>
+            )}
+
             <button
               className="btn btn-primary topbar-add-site-btn"
               onClick={() => {
                 setPlatform('websec');
-                localStorage.setItem('aegis_platform', 'websec');
+                localStorage.setItem('nad_platform', 'websec');
               }}
               title="Open Website Security Monitoring & Vulnerability Assessment Platform"
             >
@@ -164,26 +214,37 @@ export function Dashboard() {
           <Kpi label="Active Flows" value={`${stats.active_flows}`} sub="5-tuple tracked" accent="var(--violet)" icon="link" />
           <Kpi label="High / Critical" value={`${crit}`} sub={`${totalAlerts} total alerts`} accent={crit > 0 ? 'var(--crit)' : 'var(--low)'} icon="alert" />
           <div
-            onClick={() => {
-              setPlatform('websec');
-              localStorage.setItem('aegis_platform', 'websec');
-            }}
+            onClick={() => setTab('Agents')}
             style={{ cursor: 'pointer' }}
-            title="Click to open Website Security Monitoring & Vulnerability Assessment Platform"
+            title="Click to view all connected computers and agents"
           >
             <Kpi
-              label="Web Posture"
-              value={`${sites.length} site${sites.length === 1 ? '' : 's'}`}
-              sub={
-                sites.length > 0
-                  ? `${Math.round(sites.reduce((a, b) => a + (b.security_score ?? 100), 0) / sites.length)}/100 avg score`
-                  : '+ Click to monitor target'
-              }
+              label="Connected PCs"
+              value={`${onlineAgents} online`}
+              sub={`${connectStatus?.total_agents ?? 0} registered nodes`}
               accent="var(--blue)"
-              icon="globe"
+              icon="desktop"
             />
           </div>
         </div>
+
+        {/* ── View Router ──────────────────────────────── */}
+        {tab === 'Connect' && (
+          <ConnectPage
+            connectStatus={connectStatus}
+            onNavigateToAgents={() => setTab('Agents')}
+          />
+        )}
+
+        {tab === 'Agents' && (
+          <AgentsPage
+            onBackToConnect={() => setTab('Connect')}
+          />
+        )}
+
+        {tab === 'Assets' && (
+          <AssetsAllowlistPage />
+        )}
 
         {(tab === 'Overview' || tab === 'Network') && (
           <>
@@ -242,9 +303,20 @@ export function Dashboard() {
 
         {(tab === 'Overview' || tab === 'Alerts') && (
           <div className="card">
-            <div className="card-head">
-              <h3><span className="icon"><Icon name="alert" size={16} /></span> Threat Alerts</h3>
-              <span className="card-sub">{totalAlerts} total</span>
+            <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <h3><span className="icon"><Icon name="alert" size={16} /></span> Threat Alerts</h3>
+                <span className="card-sub">{totalAlerts} total</span>
+              </div>
+              <a
+                href="/api/alerts/export?format=csv"
+                download
+                className="btn"
+                style={{ padding: '4px 10px', fontSize: 12, border: '1px solid var(--border)' }}
+                title="Download alerts as CSV"
+              >
+                Export CSV
+              </a>
             </div>
             <AlertFeed alerts={alerts} />
           </div>
@@ -257,7 +329,7 @@ export function Dashboard() {
             onOpenAudit={(s) => setAuditSite(s)}
             onNavigateToWebSec={() => {
               setPlatform('websec');
-              localStorage.setItem('aegis_platform', 'websec');
+              localStorage.setItem('nad_platform', 'websec');
             }}
           />
         )}

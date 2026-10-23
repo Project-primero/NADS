@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Alert, SeriesPoint, Site } from '../types';
+import type { Alert, ConnectStatus, SeriesPoint, Site } from '../types';
 
 interface Snapshot {
   packets: number; pps: number; active_flows: number;
   alerts: Alert[]; counts: Record<string, number>;
   attack_mix: Record<string, number>; protocols: Record<string, number>;
   series: SeriesPoint[]; sites: Site[];
+  connect?: ConnectStatus;
+  learning_mode?: boolean;
+  online_agents?: number;
+  total_agents?: number;
 }
 
 export function useWebSocket(url: string) {
@@ -16,6 +20,9 @@ export function useWebSocket(url: string) {
   const [protocols, setProtocols] = useState<Record<string, number>>({});
   const [series, setSeries] = useState<SeriesPoint[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
+  const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
+  const [learningMode, setLearningMode] = useState(false);
+  const [onlineAgents, setOnlineAgents] = useState(0);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
@@ -34,21 +41,24 @@ export function useWebSocket(url: string) {
         }
       };
       sock.onmessage = (e) => {
-      try {
-        const m = JSON.parse(e.data);
-        if (m.type === 'stats') {
-          const s = m as Snapshot;
-          setStats({ packets: s.packets, pps: s.pps, active_flows: s.active_flows });
-          setAlerts(s.alerts ?? []);
-          setCounts(s.counts ?? {});
-          setAttackMix(s.attack_mix ?? {});
-          setProtocols(s.protocols ?? {});
-          setSeries(s.series ?? []);
-          setSites(s.sites ?? []);
-        } else if (m.type === 'alert') {
-          setAlerts((a) => [m as Alert, ...a].slice(0, 100));
-        }
-      } catch { /* ignore */ }
+        try {
+          const m = JSON.parse(e.data);
+          if (m.type === 'stats') {
+            const s = m as Snapshot;
+            setStats({ packets: s.packets, pps: s.pps, active_flows: s.active_flows });
+            setAlerts(s.alerts ?? []);
+            setCounts(s.counts ?? {});
+            setAttackMix(s.attack_mix ?? {});
+            setProtocols(s.protocols ?? {});
+            setSeries(s.series ?? []);
+            setSites(s.sites ?? []);
+            if (s.connect) setConnectStatus(s.connect);
+            if (typeof s.learning_mode === 'boolean') setLearningMode(s.learning_mode);
+            if (typeof s.online_agents === 'number') setOnlineAgents(s.online_agents);
+          } else if (m.type === 'alert') {
+            setAlerts((a) => [m as Alert, ...a].slice(0, 100));
+          }
+        } catch { /* ignore */ }
       };
     };
     const ping = setInterval(() => { if (sock && sock.readyState === 1) sock.send('ping'); }, 10000);
@@ -56,7 +66,10 @@ export function useWebSocket(url: string) {
     return () => { closed = true; clearTimeout(timer); clearInterval(ping); sock?.close(); };
   }, [url]);
 
-  return { stats, alerts, counts, attackMix, protocols, series, sites, connected };
+  return {
+    stats, alerts, counts, attackMix, protocols, series, sites,
+    connectStatus, learningMode, onlineAgents, connected
+  };
 }
 
 export function useTopTalkers() {
@@ -98,6 +111,4 @@ export function useSiteTrend(siteId: number | null) {
       clearInterval(interval);
     };
   }, [siteId]);
-  return trend;
 }
-
