@@ -4,7 +4,8 @@
 
 Real-time network monitoring and threat detection.
 
-![Network Anomaly Detection Dashboard](YOUR_IMAGE_URL)
+![Network Anomaly Detection Dashboard] <img width="1920" height="1080" alt="Screenshot From 2026-10-23 19-17-24" src="https://github.com/user-attachments/assets/9ecab80a-bb75-419a-98c9-288e2b516743" />
+
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)]() [![ml](https://img.shields.io/badge/ML-IsolationForest%20%2B%20LSTM-orange)]() [![ui](https://img.shields.io/badge/UI-React%2018-61dafb)]() [![tests](https://img.shields.io/badge/tests-6%20passing-brightgreen)]()
 
 Real-time SOC system: **capture → flow features → 30 signature detectors ⊕ ML → correlated alerts → live dashboard.**
