@@ -1,23 +1,29 @@
 """Central configuration for NAD system."""
+import os
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    app_name: str = "Network Anomaly Detector"
-    interface: str = "lo"
-    capture_mode: str = "simulate"  # simulate | live (scapy)
+    app_name: str = "Network Anomaly Detection"
+    interface: str = os.getenv("AEGIS_IFACE", os.getenv("NAD_INTERFACE", "lo"))
+    capture_mode: str = os.getenv("AEGIS_MODE", os.getenv("NAD_CAPTURE_MODE", "simulate"))  # simulate | live | pcap | agent
+    pcap_path: str = os.getenv("AEGIS_PCAP", "")
+    bpf_filter: str = os.getenv("AEGIS_BPF_FILTER", "")
+    learning_mode: bool = os.getenv("AEGIS_LEARNING_MODE", "false").lower() in ("true", "1", "yes")
+
     flow_timeout: int = 60          # seconds before flow expires
     db_path: str = "data/alerts.db"
     model_dir: str = "models"
     model_type: str = "hybrid"      # isolation_forest | lstm | transformer | hybrid
     anomaly_threshold: float = 0.7
     ws_broadcast_interval: float = 1.0
+    retention_days: int = 30
 
-    # Site monitor
+    # Site monitor (WebSec)
     site_check_default_interval: int = 60
     site_check_timeout: float = 10.0
     allow_private_targets: bool = False
-    seed_site_url: str = ""          # optional URL to auto-register on first boot
+    seed_site_url: str = ""
 
     # Signature thresholds (see docs/DETECTION_CATALOG.md)
     port_scan_ports: int = 15

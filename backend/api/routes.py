@@ -1,8 +1,13 @@
-"""REST endpoints: stats, alerts, flows, analytics, catalog, sites."""
+"""REST endpoints: stats, alerts, flows, analytics, catalog, sites, connect, agents, assets."""
 import asyncio
+import csv
+import io
+import os
+import secrets
+import shutil
 import time
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -26,6 +31,57 @@ class SiteUpdate(BaseModel):
     enabled: bool | None = None
 
 
+# ── Connect Models ───────────────────────────────────────
+class ConnectStartIn(BaseModel):
+    mode: str = "simulate"  # simulate | live | pcap | agent
+    interface: str = "lo"
+    intensity: str = "medium"  # low | medium | high | stress
+    attacks: list[str] = ["all"]
+    bpf_filter: str = ""
+    promiscuous: bool = False
+    speed: str = "instant"
+    pcap_file: str = ""
+
+
+class ConnectTestIn(BaseModel):
+    interface: str = "lo"
+    duration: int = 10
+
+
+class AgentTokenIn(BaseModel):
+    name: str = ""
+    site: str = "Default Site"
+
+
+class AgentVerifyIn(BaseModel):
+    token: str
+    hostname: str = ""
+    site: str = "Default Site"
+    name: str = ""
+    ip: str = ""
+    os: str = ""
+
+
+class AgentIngestIn(BaseModel):
+    agent_id: str = ""
+    site: str = "Default Site"
+    packets: list[dict] = []
+    pps: float = 0.0
+
+
+class AssetUpdateIn(BaseModel):
+    hostname: str | None = None
+    owner: str | None = None
+    department: str | None = None
+    device_type: str | None = None
+
+
+class AllowlistIn(BaseModel):
+    cidr_or_ip: str
+    port: int = 0
+    description: str = ""
+
+
 @router.get("/stats")
 def stats():
     cap = _state["capture"]
@@ -44,6 +100,25 @@ def alerts(limit: int = 50):
 @router.get("/alerts/history")
 def history(limit: int = 100):
     return {"alerts": _state["db"].get_alerts(limit)}
+
+
+@router.get("/alerts/export")
+def export_alerts(format: str = "json", limit: int = 5000):
+    records = _state["db"].export_alerts(limit)
+    if format.lower() == "csv":
+        output = io.StringIO()
+        fieldnames = ["id", "timestamp", "attack_type", "severity", "description",
+                      "src_ip", "dst_ip", "src_port", "dst_port", "protocol", "anomaly_score"]
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        for r in records:
+            writer.writerow({k: r.get(k, "") for k in fieldnames})
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="nad_alerts_{int(time.time())}.csv"'}
+        )
+    return {"alerts": records, "count": len(records), "timestamp": time.time()}
 
 
 @router.get("/flows")
@@ -84,19 +159,369 @@ def health():
     return {"status": "ok"}
 
 
-# ── Sites ────────────────────────────────────────────────
+# ── Universal Connect Endpoints ─────────────────────────
+
+@router.get("/connect/interfaces")
+def get_interfaces():
+    cap = _state["capture"]
+    return {"interfaces": cap.get_host_interfaces()}
+
+
+@router.get("/connect/status")
+def get_connect_status():
+    cap = _state["capture"]
+    status = cap.get_status()
+    db = _state["db"]
+    agents = db.list_agents()
+    online_agents = [a for a in agents if a["status"] == "ONLINE"]
+    status.update({
+        "online_agents": len(online_agents),
+        "total_agents": len(agents),
+        "allowlist_rules": len(db.list_allowlist()),
+        "learning_mode": bool(_state.get("learning_mode", False))
+    })
+    return status
+
+
+@router.post("/connect/start")
+def start_capture(body: ConnectStartIn):
+    cap = _state["capture"]
+    db = _state["db"]
+
+    try:
+        status = cap.switch_mode(
+            mode=body.mode,
+            interface=body.interface,
+            intensity=body.intensity,
+            attacks=body.attacks,
+            bpf_filter=body.bpf_filter,
+            promiscuous=body.promiscuous,
+            speed=body.speed,
+            pcap_file=body.pcap_file
+        )
+        db.log_audit("CONNECT_START", details=f"Switched mode to {body.mode} ({body.interface})")
+        return {"ok": True, "status": status}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to start capture: {e}") from e
+
+
+@router.post("/connect/stop")
+def stop_capture():
+    cap = _state["capture"]
+    db = _state["db"]
+    cap.stop()
+    db.log_audit("CONNECT_STOP", details=f"Stopped active capture mode ({cap.mode})")
+    return {"ok": True, "status": cap.get_status()}
+
+
+@router.post("/connect/test")
+def test_interface(body: ConnectTestIn):
+    cap = _state["capture"]
+    res = cap.test_interface_traffic(interface=body.interface, duration=body.duration)
+    return res
+
+
+# ── PCAP File Ingestion ──────────────────────────────────
+
+@router.post("/pcap/upload")
+async def upload_pcap(request: Request, speed: str = "instant"):
+    pcap_dir = "data/pcaps"
+    os.makedirs(pcap_dir, exist_ok=True)
+    job_id = f"job-{secrets.token_hex(6)}"
+
+    filename = "capture.pcap"
+    content_type = request.headers.get("content-type", "")
+    save_path = os.path.join(pcap_dir, f"{job_id}_{filename}")
+    size = 0
+
+    if "multipart/form-data" in content_type:
+        try:
+            form = await request.form()
+            uploaded_file = form.get("file")
+            if uploaded_file and hasattr(uploaded_file, "filename"):
+                filename = uploaded_file.filename
+                save_path = os.path.join(pcap_dir, f"{job_id}_{filename}")
+                content = await uploaded_file.read()
+                size = len(content)
+                if size > 100 * 1024 * 1024:
+                    raise HTTPException(400, "File too large (max 100MB)")
+                with open(save_path, "wb") as buffer:
+                    buffer.write(content)
+            else:
+                raise HTTPException(400, "No file found in upload form")
+        except RuntimeError as e:
+            raise HTTPException(500, f"Multipart upload requires python-multipart: {e}") from e
+    else:
+        # Raw binary streaming upload
+        content = await request.body()
+        size = len(content)
+        if size > 100 * 1024 * 1024:
+            raise HTTPException(400, "File too large (max 100MB)")
+        with open(save_path, "wb") as buffer:
+            buffer.write(content)
+
+    if not filename.lower().endswith((".pcap", ".pcapng", ".cap")):
+        if os.path.exists(save_path):
+            os.remove(save_path)
+        raise HTTPException(400, "Unsupported file format. Please upload .pcap or .pcapng")
+
+    db = _state["db"]
+    job = db.save_pcap_job(job_id=job_id, filename=filename, speed=speed)
+
+    # Callback to update database during replay
+    def _progress(stats: dict):
+        db.update_pcap_job(
+            job_id,
+            total_packets=stats.get("total_packets", 0),
+            processed_packets=stats.get("processed_packets", 0),
+            alerts_count=stats.get("alerts_triggered", 0),
+            status=stats.get("status", "RUNNING"),
+            error=stats.get("error", "")
+        )
+
+    # Automatically launch replay in the pipeline
+    cap = _state["capture"]
+    cap.switch_mode(mode="pcap", pcap_file=save_path, speed=speed, on_progress=_progress)
+    db.log_audit("PCAP_UPLOAD", details=f"Uploaded {filename} (Job {job_id})")
+
+    return {"ok": True, "job_id": job_id, "filename": filename, "size_bytes": size}
+
+
+@router.get("/pcap/status/{job_id}")
+def pcap_status(job_id: str):
+    db = _state["db"]
+    job = db.get_pcap_job(job_id)
+    if not job:
+        raise HTTPException(404, "PCAP job not found")
+    return {"job": job}
+
+
+# ── Remote Computer Agents (Multi-Site / Universities) ───
+
+@router.get("/agents")
+def list_agents():
+    db = _state["db"]
+    return {"agents": db.list_agents()}
+
+
+@router.post("/agents/tokens")
+def create_agent_token(body: AgentTokenIn):
+    db = _state["db"]
+    agent_info = db.create_agent(name=body.name, site=body.site)
+    db.log_audit("AGENT_TOKEN_CREATED", details=f"Created token for {agent_info['name']} ({agent_info['site']})")
+    return {"ok": True, "agent": agent_info}
+
+
+@router.post("/agents/verify")
+def verify_agent(body: AgentVerifyIn):
+    db = _state["db"]
+    agent = db.verify_agent_token(body.token)
+    if not agent:
+        return JSONResponse(status_code=401, content={"ok": False, "error": "Invalid or revoked agent token"})
+
+    db.update_agent_telemetry(
+        agent_id=agent["agent_id"],
+        ip=body.ip,
+        hostname=body.hostname or body.name,
+        os_name=body.os
+    )
+    return {"ok": True, "agent_id": agent["agent_id"], "site": agent["site"], "name": agent["name"]}
+
+
+@router.post("/agents/ingest")
+def ingest_agent_packets(body: AgentIngestIn, authorization: str = Header(None)):
+    token = ""
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split("Bearer ", 1)[1].strip()
+
+    db = _state["db"]
+    agent = db.verify_agent_token(token)
+    if not agent:
+        raise HTTPException(401, "Invalid agent authentication token")
+
+    cap = _state["capture"]
+    count = len(body.packets)
+    for pkt in body.packets:
+        cap.ingest_remote_packet(pkt, agent_id=agent["agent_id"], site=body.site or agent["site"])
+
+    db.update_agent_telemetry(
+        agent_id=agent["agent_id"],
+        pps=body.pps,
+        packets_inc=count
+    )
+    return {"ok": True, "ingested": count}
+
+
+@router.delete("/agents/{agent_id}")
+def delete_agent(agent_id: str):
+    db = _state["db"]
+    deleted = db.delete_agent(agent_id)
+    if not deleted:
+        raise HTTPException(404, "Agent not found")
+    db.log_audit("AGENT_REVOKED", details=f"Revoked agent {agent_id}")
+    return {"ok": True}
+
+
+@router.get("/agents/install.sh")
+def agent_installer(request: Request):
+    base_url = str(request.base_url).rstrip("/")
+    script = f"""#!/usr/bin/env bash
+# Network Anomaly Detection Endpoint Agent Installer for Remote Computers & Universities
+set -e
+SERVER_URL="${{NAD_SERVER:-${{AEGIS_SERVER:-{base_url}}}}}"
+TOKEN="$1"
+SITE="${{2:-Default Site}}"
+NAME="${{3:-$(hostname)}}"
+
+if [ -z "$TOKEN" ]; then
+  echo "Usage: curl -sSL $SERVER_URL/api/agents/install.sh | bash -s -- <TOKEN> [SITE] [NAME]"
+  exit 1
+fi
+
+echo "=================================================="
+echo "🛡️  Installing Network Anomaly Detection Endpoint Agent"
+echo "Server : $SERVER_URL"
+echo "Site   : $SITE"
+echo "Node   : $NAME"
+echo "=================================================="
+
+INSTALL_DIR="${{HOME:-/tmp}}/.nad-agent"
+mkdir -p "$INSTALL_DIR"
+curl -sSL "$SERVER_URL/api/agents/script" -o "$INSTALL_DIR/agent.py"
+
+python3 "$INSTALL_DIR/agent.py" --server "$SERVER_URL" --token "$TOKEN" --site "$SITE" --name "$NAME"
+"""
+    return PlainTextResponse(script)
+
+
+@router.get("/agents/install.ps1")
+def agent_installer_windows(request: Request):
+    base_url = str(request.base_url).rstrip("/")
+    script = f"""param(
+    [Parameter(Position=0)]
+    [string]$Token = "",
+    [Parameter(Position=1)]
+    [string]$Site = "Default Site",
+    [Parameter(Position=2)]
+    [string]$Name = $env:COMPUTERNAME
+)
+$ServerUrl = "{base_url}"
+Write-Host "==================================================" -ForegroundColor Cyan
+Write-Host "🛡️  Installing Network Anomaly Detection Agent (Windows)" -ForegroundColor Cyan
+Write-Host "Server : $ServerUrl"
+Write-Host "Site   : $Site"
+Write-Host "Node   : $Name"
+Write-Host "==================================================" -ForegroundColor Cyan
+
+$AgentScript = "$env:TEMP\\aegis-agent.py"
+Invoke-WebRequest -Uri "$ServerUrl/api/agents/script" -OutFile $AgentScript -UseBasicParsing
+python $AgentScript --server "$ServerUrl" --token "$Token" --site "$Site" --name "$Name"
+"""
+    return PlainTextResponse(script)
+
+
+@router.get("/agents/script")
+def get_agent_script():
+    agent_path = "scripts/aegis-agent.py"
+    if os.path.exists(agent_path):
+        with open(agent_path, "r") as f:
+            return PlainTextResponse(f.read())
+    raise HTTPException(404, "Agent script not found")
+
+
+# ── Asset Inventory & Allowlist ──────────────────────────
+
+@router.get("/assets")
+def list_assets():
+    db = _state["db"]
+    return {"assets": db.list_assets()}
+
+
+@router.put("/assets/{ip}")
+def update_asset(ip: str, body: AssetUpdateIn):
+    db = _state["db"]
+    res = db.update_asset(
+        ip=ip,
+        hostname=body.hostname,
+        owner=body.owner,
+        department=body.department,
+        device_type=body.device_type
+    )
+    if not res:
+        raise HTTPException(404, "Asset IP not found")
+    return {"asset": res}
+
+
+@router.get("/allowlist")
+def list_allowlist():
+    db = _state["db"]
+    return {"allowlist": db.list_allowlist()}
+
+
+@router.post("/allowlist")
+def add_allowlist(body: AllowlistIn):
+    db = _state["db"]
+    try:
+        rule = db.add_allowlist(cidr_or_ip=body.cidr_or_ip, port=body.port, description=body.description)
+        db.log_audit("ALLOWLIST_ADD", details=f"Added {body.cidr_or_ip}:{body.port}")
+        return {"ok": True, "rule": rule}
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.delete("/allowlist/{allowlist_id}")
+def delete_allowlist(allowlist_id: int):
+    db = _state["db"]
+    deleted = db.delete_allowlist(allowlist_id)
+    if not deleted:
+        raise HTTPException(404, "Allowlist entry not found")
+    db.log_audit("ALLOWLIST_DELETE", details=f"Removed rule ID {allowlist_id}")
+    return {"ok": True}
+
+
+# ── System Health & Safe Response ───────────────────────
+
+@router.get("/system/health")
+def system_health():
+    cap = _state["capture"]
+    import resource
+    usage = resource.getrusage(resource.RUSAGE_SELF)
+    mem_mb = round(usage.ru_maxrss / 1024, 1) if sys.platform != "darwin" else round(usage.ru_maxrss / (1024 * 1024), 1)
+
+    return {
+        "status": "healthy",
+        "pps": cap.current_pps(),
+        "total_packets": cap.stats["packets"],
+        "dropped_packets": cap.stats.get("dropped", 0),
+        "memory_mb": mem_mb,
+        "mode": cap.mode,
+        "source": cap.current_source_info
+    }
+
+
+@router.get("/firewall/rule/{ip}")
+def get_firewall_rule(ip: str):
+    return {
+        "ip": ip,
+        "iptables": f"sudo iptables -A INPUT -s {ip} -j DROP",
+        "ufw": f"sudo ufw deny from {ip} to any",
+        "nftables": f"sudo nft add rule inet filter input ip saddr {ip} drop",
+        "cisco_ios": f"access-list 100 deny ip host {ip} any",
+        "mikrotik": f"/ip firewall filter add chain=input src-address={ip} action=drop comment=\"NAD Auto-Block\""
+    }
+
+
+# ── Sites (WebSec) ──────────────────────────────────────
 
 @router.get("/sites")
 def list_sites():
     mon = _state.get("monitor")
     summaries = mon.snapshot() if mon else []
-    # merge full site rows with monitor snapshots
     rows = {s["id"]: s for s in _state["db"].list_sites()}
     merged = []
     for snap in summaries:
         row = rows.get(snap["id"], {})
         merged.append({**row, **snap})
-    # include sites with no check yet
     seen = {m["id"] for m in merged}
     for sid, row in rows.items():
         if sid not in seen:
@@ -117,15 +542,14 @@ async def add_site(body: SiteIn):
     try:
         site = _state["db"].add_site(body.name.strip() or url, url,
                                      body.interval or _state.get("default_interval", 60))
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         raise HTTPException(500, f"failed to save site: {e}") from e
     mon = _state.get("monitor")
     check = None
     if mon:
         try:
             check = await mon.check_now(site)
-        except Exception as e:  # noqa: BLE001
-            # site is saved even if the first probe fails
+        except Exception as e:
             check = mon._error_check(site, f"initial probe error: {e}")
     merged_site = {**site}
     if check:
@@ -154,148 +578,26 @@ def delete_site(site_id: int):
     ok = _state["db"].delete_site(site_id)
     if not ok:
         raise HTTPException(404, "site not found")
-    return {"deleted": site_id}
-
-
-@router.get("/sites/{site_id}/history")
-def site_history(site_id: int, limit: int = 288):
-    site = _state["db"].get_site(site_id)
-    if not site:
-        raise HTTPException(404, "site not found")
-    return {"site": site, "checks": _state["db"].get_checks(site_id, limit)}
-
-
-@router.get("/sites/{site_id}/audit")
-def site_audit(site_id: int):
-    site = _state["db"].get_site(site_id)
-    if not site:
-        raise HTTPException(404, "site not found")
-    checks = _state["db"].get_checks(site_id, 1)
-    latest = checks[0] if checks else None
-    return {"site": site, "audit": latest}
-
-
-@router.post("/sites/{site_id}/check")
-async def force_check(site_id: int):
-    site = _state["db"].get_site(site_id)
-    if not site:
-        raise HTTPException(404, "site not found")
     mon = _state.get("monitor")
-    if not mon:
-        raise HTTPException(503, "monitor not running")
-    check = await mon.check_now(site)
-    return {"check": check}
+    if mon:
+        mon.forget(site_id)
+    return {"deleted": True}
 
 
 @router.post("/sites/{site_id}/scan-now")
 async def scan_now(site_id: int):
-    return await force_check(site_id)
-
-
-@router.post("/sites/scan-all")
-async def scan_all():
+    site = _state["db"].get_site(site_id)
+    if not site:
+        raise HTTPException(404, "site not found")
     mon = _state.get("monitor")
     if not mon:
-        raise HTTPException(503, "monitor not running")
-    sites = _state["db"].list_sites()
-    tasks = [mon.check_now(site) for site in sites if site.get("enabled", True)]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    return {"scanned": len(tasks), "results_count": len(results)}
+        raise HTTPException(500, "monitor not initialized")
+    check = await mon.check_now(site)
+    return {"check": check}
 
 
-class InstantScanIn(BaseModel):
-    url: str
-    name: str = ""
-
-
-@router.post("/scanner/instant")
-async def scanner_instant(body: InstantScanIn):
-    raw_url = body.url.strip()
-    if not raw_url:
-        raise HTTPException(400, "URL is required")
-    if not raw_url.startswith(("http://", "https://")):
-        raw_url = "https://" + raw_url
-    fake_site = {
-        "id": 0,
-        "name": body.name.strip() or raw_url,
-        "url": raw_url,
-        "check_interval_sec": 60,
-        "enabled": True,
-    }
-    mon = _state.get("monitor")
-    if not mon:
-        raise HTTPException(503, "monitor not running")
-    import httpx
-    from backend.monitor.site_checker import BROWSER_HEADERS, check_site
-    try:
-        async with httpx.AsyncClient(timeout=mon.timeout, headers=BROWSER_HEADERS, follow_redirects=True) as client:
-            check = await check_site(client, fake_site, mon.allow_private)
-    except Exception as e:  # noqa: BLE001
-        check = mon._error_check(fake_site, f"scan error: {e}")
-    merged_site = {
-        **fake_site,
-        "up": check.get("up"),
-        "status_code": check.get("status_code", 0),
-        "latency_ms": check.get("latency_ms", 0.0),
-        "error": check.get("error", ""),
-        "tls_days_left": check.get("tls_days_left", -1),
-        "tls_issuer": check.get("tls_issuer", ""),
-        "tls_valid": check.get("tls_valid", False),
-        "tls_proto": check.get("tls_proto", ""),
-        "tls_cipher": check.get("tls_cipher", ""),
-        "security_score": check.get("security_score", 0),
-        "server_banner": check.get("server_banner", ""),
-        "technology": check.get("technology", ""),
-        "headers": check.get("headers", {}),
-        "findings": check.get("findings", []),
-        "uptime_24h": 100.0 if check.get("up") else 0.0,
-    }
-    return {"site": merged_site, "check": check}
-
-
-@router.get("/sites/summary")
-def sites_summary():
-    mon = _state.get("monitor")
-    summaries = mon.snapshot() if mon else []
-    total = len(summaries)
-    if total == 0:
-        return {
-            "total_sites": 0,
-            "avg_security_score": 100.0,
-            "up_count": 0,
-            "down_count": 0,
-            "critical_high_count": 0,
-            "tls_expiring_count": 0,
-            "avg_uptime_24h": 100.0,
-        }
-    scores = [s.get("security_score", 0) for s in summaries if s.get("security_score") is not None]
-    avg_score = round(sum(scores) / len(scores), 1) if scores else 100.0
-    up_count = sum(1 for s in summaries if s.get("up") is True)
-    down_count = sum(1 for s in summaries if s.get("up") is False)
-    tls_expiring = sum(1 for s in summaries if 0 <= s.get("tls_days_left", -1) < 30)
-
-    crit_high = 0
-    for s in summaries:
-        for f in s.get("findings", []):
-            if f.get("severity") in ("CRITICAL", "HIGH"):
-                crit_high += 1
-
-    uptimes = [s.get("uptime_24h", -1.0) for s in summaries if s.get("uptime_24h", -1.0) >= 0]
-    avg_uptime = round(sum(uptimes) / len(uptimes), 1) if uptimes else 100.0
-
-    return {
-        "total_sites": total,
-        "avg_security_score": avg_score,
-        "up_count": up_count,
-        "down_count": down_count,
-        "critical_high_count": crit_high,
-        "tls_expiring_count": tls_expiring,
-        "avg_uptime_24h": avg_uptime,
-    }
-
-
-@router.get("/sites/{site_id}/trend")
-def site_trend(site_id: int, limit: int = 48):
+@router.get("/sites/{site_id}/history")
+def site_history(site_id: int, limit: int = 50):
     site = _state["db"].get_site(site_id)
     if not site:
         raise HTTPException(404, "site not found")

@@ -52,5 +52,68 @@ class SiteCheck(Base):
     findings = Column(JSON, default=list)
 
 
+class Agent(Base):
+    __tablename__ = "agents"
+    id = Column(Integer, primary_key=True)
+    agent_id = Column(String, unique=True, index=True)
+    name = Column(String, default="")
+    site = Column(String, default="Default Site")
+    token_hash = Column(String, index=True)
+    ip = Column(String, default="")
+    hostname = Column(String, default="")
+    os = Column(String, default="")
+    status = Column(String, default="OFFLINE")  # ONLINE / OFFLINE
+    pps = Column(Float, default=0.0)
+    total_packets = Column(Integer, default=0)
+    last_seen = Column(Float, default=0.0)
+    created_at = Column(Float, default=0.0)
+
+
+class Asset(Base):
+    __tablename__ = "assets"
+    id = Column(Integer, primary_key=True)
+    ip = Column(String, unique=True, index=True)
+    mac = Column(String, default="")
+    hostname = Column(String, default="")
+    owner = Column(String, default="")
+    department = Column(String, default="")
+    device_type = Column(String, default="Unknown")  # Server, Workstation, IoT, Router, Unknown
+    first_seen = Column(Float, default=0.0)
+    last_seen = Column(Float, default=0.0)
+    packet_count = Column(Integer, default=0)
+
+
+class Allowlist(Base):
+    __tablename__ = "allowlist"
+    id = Column(Integer, primary_key=True)
+    cidr_or_ip = Column(String, index=True)
+    port = Column(Integer, default=0)  # 0 means all ports
+    description = Column(String, default="")
+    created_at = Column(Float, default=0.0)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(Float)
+    action = Column(String)
+    user = Column(String, default="Admin")
+    details = Column(String, default="")
+
+
+class PcapJob(Base):
+    __tablename__ = "pcap_jobs"
+    id = Column(String, primary_key=True)
+    filename = Column(String)
+    total_packets = Column(Integer, default=0)
+    processed_packets = Column(Integer, default=0)
+    alerts_count = Column(Integer, default=0)
+    status = Column(String, default="QUEUED")  # QUEUED, RUNNING, COMPLETED, FAILED
+    speed = Column(String, default="instant")
+    error = Column(String, default="")
+    started_at = Column(Float, default=0.0)
+    completed_at = Column(Float, default=0.0)
+
+
 def get_engine(db_path: str = "data/alerts.db"):
     return create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
