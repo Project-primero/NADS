@@ -1,4 +1,7 @@
+
 # 🛡️ Aegis — Network Anomaly Detection & Cyber Attack Monitoring
+
+![Uploading Screenshot From 2026-10-23 19-17-24.png…]()
 
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)]() [![ml](https://img.shields.io/badge/ML-IsolationForest%20%2B%20LSTM-orange)]() [![ui](https://img.shields.io/badge/UI-React%2018-61dafb)]() [![tests](https://img.shields.io/badge/tests-6%20passing-brightgreen)]()
 
