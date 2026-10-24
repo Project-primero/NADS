@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     allow_private_targets: bool = False
     seed_site_url: str = ""
 
-    # Signature thresholds (see docs/DETECTION_CATALOG.md)
+    # Signature thresholds (see docs/REFERENCE.md)
     port_scan_ports: int = 15
     port_scan_window: int = 60
     syn_flood_count: int = 50
