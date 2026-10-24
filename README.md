@@ -14,14 +14,14 @@ Real-time network monitoring, automated threat detection, and machine learning a
 
 ## 👥 Team Members & Contributors
 
-| # | Full Name | CTC ID | Role / Contribution |
-|:---:|---|:---:|---|
-| 1 | **Dereje Tesfaye** | `CTC-2483-26` | Architecture, Ingestion Pipelines & Team Lead |
-| 2 | **Natnael Mamaru** | `CTC-1449-26` | ML Detection Engine & Threat Scoring Fusion |
-| 3 | **Esmael Shikur** | `CTC-6394-26` | SOC Frontend Dashboard & WebSec Platform |
-| 4 | **Yerosan Kena** | `CTC-2859-26` | Heuristic Signature Rules & Attack Detectors |
-| 5 | **Eyosias Dawit** | `CTC-7812-26` | Agent Telemetry & Database Persistence |
-| 6 | **Bona Tenu** | `CTC-1793-26` | Network Simulation, Testing & Operations |
+| # | Full Name | CTC ID |
+|:---:|---|:---:|
+| 1 | **Dereje Tesfaye** | `CTC-2483-26` |
+| 2 | **Natnael Mamaru** | `CTC-1449-26` |
+| 3 | **Esmael Shikur** | `CTC-6394-26` |
+| 4 | **Yerosan Kena** | `CTC-2859-26` |
+| 5 | **Eyosias Dawit** | `CTC-7812-26` |
+| 6 | **Bona Tenu** | `CTC-1793-26` |
 
 ---
 
