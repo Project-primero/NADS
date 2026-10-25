@@ -100,5 +100,4 @@ NAD employs a structured three-stage pipeline: **Eyes → Brain → Voice**.
 
 - 🎥 **Video Presentation**: [Group Presentation Video (1080p)](Group%20presentation%20video%201080p.mp4)
 - 📄 **Project Presentation Slides**: [NAD_Presentation.pdf](NAD_Presentation.pdf)
-- ⏱️ **2-Minute Summary Presentation**: [NAD_2_Minute_Presentation.pdf](NAD_2_Minute_Presentation.pdf)
 - 📖 **Technical Reference Manual**: [REFERENCE.md](REFERENCE.md)

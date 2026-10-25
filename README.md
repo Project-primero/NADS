@@ -32,8 +32,7 @@ Watch the comprehensive project presentation and system walkthrough:
 <video src="docs/Group%20presentation%20video%201080p.mp4" controls="controls" width="100%" style="max-height: 500px;"></video>
 
 > 🎬 **Direct Video Link / Download**: [Group presentation video 1080p.mp4](docs/Group%20presentation%20video%201080p.mp4)  
-> 📄 **Presentation Slides (PDF)**: [NAD_Presentation.pdf](docs/NAD_Presentation.pdf)  
-> ⏱️ **2-Minute Presentation (PDF)**: [NAD_2_Minute_Presentation.pdf](docs/NAD_2_Minute_Presentation.pdf)
+> 📄 **Presentation Slides (PDF)**: [NAD_Presentation.pdf](docs/NAD_Presentation.pdf)
 
 ---
 
@@ -249,7 +248,6 @@ For detailed project architecture, API endpoint specifications, and configuratio
 - [**Project Information & Architecture**](docs/PROJECT_INFO.md) — Detailed purpose, system overview, key capabilities, and architecture breakdown.
 - [**Technical Reference Manual**](docs/REFERENCE.md) — Complete REST/WebSocket API endpoints, `NAD_*`/`AEGIS_*` settings, and detection catalog.
 - [**Project Presentation Slides (PDF)**](docs/NAD_Presentation.pdf) — Slide deck covering threat detection, architecture, and value proposition.
-- [**2-Minute Presentation Summary (PDF)**](docs/NAD_2_Minute_Presentation.pdf) — Condensed executive presentation deck.
 
 ---
 
