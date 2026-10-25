@@ -25,6 +25,16 @@ Real-time network monitoring, automated threat detection, and machine learning a
 
 ---
 
+## 🎥 Group Presentation Video
+
+Watch the comprehensive project presentation and system walkthrough:
+
+<video src="docs/Group%20presentation%20video%201080p.mp4" controls="controls" width="100%" style="max-height: 500px;"></video>
+
+> 🎬 **Direct Link / Download**: [Group presentation video 1080p.mp4](docs/Group%20presentation%20video%201080p.mp4)
+
+---
+
 ## 📖 Introduction
 
 **Network Anomaly Detection (NAD)** is an enterprise-grade Cyber Attack Monitoring, Telemetry Ingestion, and Security Operations Center (SOC) platform designed for modern campus, enterprise, and laboratory networks.
