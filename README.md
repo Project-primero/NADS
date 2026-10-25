@@ -25,13 +25,89 @@ Real-time network monitoring, automated threat detection, and machine learning a
 
 ---
 
-## 🎥 Group Presentation Video
+## 🎥 Group Presentation Video & Slides
 
 Watch the comprehensive project presentation and system walkthrough:
 
 <video src="docs/Group%20presentation%20video%201080p.mp4" controls="controls" width="100%" style="max-height: 500px;"></video>
 
-> 🎬 **Direct Link / Download**: [Group presentation video 1080p.mp4](docs/Group%20presentation%20video%201080p.mp4)
+> 🎬 **Direct Video Link / Download**: [Group presentation video 1080p.mp4](docs/Group%20presentation%20video%201080p.mp4)  
+> 📄 **Presentation Slides (PDF)**: [NAD_Presentation.pdf](docs/NAD_Presentation.pdf)  
+> ⏱️ **2-Minute Presentation (PDF)**: [NAD_2_Minute_Presentation.pdf](docs/NAD_2_Minute_Presentation.pdf)
+
+---
+
+## 3. Project Information
+
+### 📋 Brief Project Description
+**Network Anomaly Detection (NAD)** is an enterprise-grade Cyber Attack Monitoring, Telemetry Ingestion, and Security Operations Center (SOC) platform engineered to protect modern enterprise, academic, and lab networks. It delivers continuous, full-visibility network security monitoring through a hybrid detection model combining rule-based heuristics and unsupervised machine learning.
+
+### 🎯 Purpose
+Traditional Intrusion Detection Systems (IDS) often produce excessive false positives, rely solely on static signatures that miss zero-day anomalies, or lack integrated remediation mechanisms. NAD solves these challenges by providing:
+1. **Holistic Visibility**: Real-time packet capture and flow analytics across local network interfaces, PCAP packet traces, and distributed endpoints.
+2. **Dual-Engine Threat Fusion**: Concurrent analysis by a deterministic signature catalog and an unsupervised Isolation Forest model to detect both known exploit patterns and novel anomalous behavior.
+3. **Immediate Operational Response**: Instant generation of copy-paste firewall rules (`iptables`, `nftables`, Windows Firewall `netsh`, Cisco ACLs) to empower security analysts to rapidly isolate malicious actors.
+4. **Holistic Perimeter Assessment**: Integrated website security auditing (WebSec) measuring TLS certificate validity, cryptographic cipher suites, and essential HTTP security headers.
+
+---
+
+## 🚀 Key Features
+
+| Category | Capability | Details |
+|---|---|---|
+| **Threat Detection** | Deterministic + Machine Learning | 30 stateful heuristic rules + Isolation Forest anomaly baseline scoring |
+| **Ingestion Modes** | 4 Capture Engines | Live NIC sniffing (Scapy), built-in attack simulator, PCAP replay, and remote telemetry agent |
+| **Interactive SOC UI** | Real-time Observability | Low-latency WebSocket streaming (`/ws`) at 1 Hz with flow visualizers and alert triage |
+| **Active Mitigation** | Multi-Platform Firewall Export | 1-click rule generation for Linux `iptables`/`nftables`, Windows Firewall, and Cisco ACLs |
+| **Web Security** | WebSec Scanner | Automated TLS certificate validity, cryptographic cipher audit, and HTTP security header grades |
+| **Distributed Monitoring**| PC-to-PC Agent Telemetry | Secure token-authenticated client agents for multi-host and lab network topologies |
+| **Forensic Export** | SQLite Persistence & Reports | Historical alert persistence with search, filtering, and CSV/JSON export |
+
+---
+
+## ⚙️ How It Works (System Architecture)
+
+NAD operates using a three-tier **"Eyes • Brain • Voice"** pipeline:
+
+```
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │                           1. EYES (Data Ingestion)                      │
+  │   • Live NIC Sniffing (Scapy / raw socket)                            │
+  │   • PCAP Packet Replay (streaming at 1x-10x speed)                     │
+  │   • Attack Traffic Simulator (20+ attack profiles)                     │
+  │   • Distributed Remote Agents (aegis-agent.py via REST)                │
+  └───────────────────────────────────┬────────────────────────────────────┘
+                                      │ Packets / 5-Tuple Flows
+                                      ▼
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │                           2. BRAIN (Fusion Analysis)                   │
+  │   ┌───────────────────────────────────┬────────────────────────────┐   │
+  │   │ Signature Engine (30 Rules)       │ ML Engine (Hybrid IF)      │   │
+  │   │ • Port Scans (T1046)              │ • 41 flow features extracted│  │
+  │   │ • Floods (SYN, UDP, ICMP - T1498) │ • Unsupervised Isolation   │   │
+  │   │ • Brute Force (T1110)             │   Forest baseline scoring  │   │
+  │   │ • DNS Exfiltration (T1048)        │ • Zero-day anomaly scores  │   │
+  │   │ • Web Exploits (SQLi, XSS, Log4j) │   (Threshold ≥ 0.7)        │   │
+  │   └───────────────────────────────────┴────────────────────────────┘   │
+  │                     Threat Correlation & Scoring                       │
+  └───────────────────────────────────┬────────────────────────────────────┘
+                                      │ Correlated Security Alerts
+                                      ▼
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │                           3. VOICE (Interface & Action)                │
+  │   • React SOC Dashboard (Real-time WebSocket telemetry)                │
+  │   • FastAPI REST Endpoints (/docs Swagger UI)                          │
+  │   • SQLite Alert Persistence & CSV/JSON Export                         │
+  │   • Instant Mitigation Playbooks (iptables, nftables, netsh)           │
+  └────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Eyes (Telemetry Ingestion)**: Ingests raw Ethernet frames and IP packets from physical NICs, synthetic traffic generators, PCAP capture replays, or remote agent endpoints, transforming raw packets into structured 5-tuple bidirectional flows (`src_ip`, `dst_ip`, `src_port`, `dst_port`, `protocol`).
+2. **Brain (Dual-Engine Threat Fusion)**:
+   - **Signature Engine**: Tracks connection state and packet frequencies across sliding time windows against 30 behavioral threat definitions mapped to MITRE ATT&CK tactics.
+   - **Machine Learning Engine**: Computes 41 statistical features per flow (packet size variance, inter-arrival timing, flag ratios) and evaluates them against an Isolation Forest model to detect novel zero-day anomalies.
+   - **Correlation & Scoring**: Merges heuristic alerts and ML anomaly scores into prioritized severity levels (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
+3. **Voice (Presentation & Active Response)**: Broadcasts telemetry snapshots via WebSockets every second to the React SOC dashboard, persists incidents to SQLite, and renders actionable defense playbooks including copy-ready firewall syntax.
 
 ---
 
@@ -167,10 +243,13 @@ NAD supports connecting multiple physical or virtual computers across your local
 
 ---
 
-## 📚 Technical Documentation Reference
+## 📚 Technical Documentation & Resources
 
-For full API endpoint specifications, environment configurations, and the 30-rule detection catalog:
+For detailed project architecture, API endpoint specifications, and configuration:
+- [**Project Information & Architecture**](docs/PROJECT_INFO.md) — Detailed purpose, system overview, key capabilities, and architecture breakdown.
 - [**Technical Reference Manual**](docs/REFERENCE.md) — Complete REST/WebSocket API endpoints, `NAD_*`/`AEGIS_*` settings, and detection catalog.
+- [**Project Presentation Slides (PDF)**](docs/NAD_Presentation.pdf) — Slide deck covering threat detection, architecture, and value proposition.
+- [**2-Minute Presentation Summary (PDF)**](docs/NAD_2_Minute_Presentation.pdf) — Condensed executive presentation deck.
 
 ---
 
