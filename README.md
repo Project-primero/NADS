@@ -122,6 +122,8 @@ It features a **Two-Engine Threat Fusion Pipeline**:
 
 ## ⚙️ How to Set Up This System
 
+> 📖 **Comprehensive Guide**: For complete multi-node instructions, Docker deployments, environment configurations, and troubleshooting, see the [**Complete Setup & Deployment Guide**](docs/SETUP.md).
+
 ### 📋 Prerequisites
 - **Operating System**: Linux (Ubuntu 20.04+, Debian, Fedora, Arch) or macOS / Windows WSL2.
 - **Python**: Python 3.10, 3.11, or 3.12 (`python3 --version`).
@@ -244,7 +246,8 @@ NAD supports connecting multiple physical or virtual computers across your local
 
 ## 📚 Technical Documentation & Resources
 
-For detailed project architecture, API endpoint specifications, and configuration:
+For detailed project architecture, setup walkthroughs, API endpoint specifications, and configuration:
+- [**Complete Setup & Deployment Guide**](docs/SETUP.md) — Step-by-step setup, Docker deployment, PC-to-PC agent connections, and troubleshooting.
 - [**Project Information & Architecture**](docs/PROJECT_INFO.md) — Detailed purpose, system overview, key capabilities, and architecture breakdown.
 - [**Technical Reference Manual**](docs/REFERENCE.md) — Complete REST/WebSocket API endpoints, `NAD_*`/`AEGIS_*` settings, and detection catalog.
 - [**Project Presentation Slides (PDF)**](docs/NAD_Presentation.pdf) — Slide deck covering threat detection, architecture, and value proposition.
